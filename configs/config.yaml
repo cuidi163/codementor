@@ -3,9 +3,9 @@
 # Ollama LLM Configuration
 ollama:
   host: "http://localhost:11434"
-  chat_model: "qwen2.5:7b"        # Model for chat/generation
-  embedding_model: "nomic-embed-text"  # Model for embeddings
-  timeout: 120                     # Request timeout in seconds
+  chat_model: "llama3.2:latest"           # Chat 模型
+  embedding_model: "nomic-embed-text"     # 更小更快的 Embedding 模型
+  timeout: 120                             # Request timeout in seconds
 
 # Vector Database Configuration
 vector:

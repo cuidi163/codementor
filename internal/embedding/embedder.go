@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/codementor/codementor/internal/indexer"
 	"github.com/codementor/codementor/internal/llm"
@@ -14,6 +15,7 @@ type Embedder struct {
 	client      *llm.Client
 	batchSize   int
 	concurrency int
+	maxRetries  int
 }
 
 // NewEmbedder creates a new embedder
@@ -21,7 +23,8 @@ func NewEmbedder(client *llm.Client) *Embedder {
 	return &Embedder{
 		client:      client,
 		batchSize:   10,
-		concurrency: 5,
+		concurrency: 2, // 降低并发，避免 Ollama 过载
+		maxRetries:  3, // 添加重试
 	}
 }
 
@@ -41,7 +44,7 @@ func (e *Embedder) EmbedChunks(ctx context.Context, chunks []*indexer.CodeChunk,
 	sem := make(chan struct{}, e.concurrency)
 
 	// Track errors
-	var embedErrors []error
+	var failedCount int
 	var errMu sync.Mutex
 
 	total := len(chunks)
@@ -56,11 +59,24 @@ func (e *Embedder) EmbedChunks(ctx context.Context, chunks []*indexer.CodeChunk,
 			// Create embedding text from chunk
 			text := e.createEmbeddingText(c)
 
-			// Generate embedding
-			embedding, err := e.client.Embed(ctx, text)
+			// Generate embedding with retry
+			var embedding []float32
+			var err error
+
+			for retry := 0; retry < e.maxRetries; retry++ {
+				embedding, err = e.client.Embed(ctx, text)
+				if err == nil {
+					break
+				}
+				// Wait before retry
+				if retry < e.maxRetries-1 {
+					time.Sleep(time.Duration(retry+1) * 500 * time.Millisecond)
+				}
+			}
+
 			if err != nil {
 				errMu.Lock()
-				embedErrors = append(embedErrors, fmt.Errorf("chunk %s: %w", c.ID, err))
+				failedCount++
 				errMu.Unlock()
 				return
 			}
@@ -81,9 +97,14 @@ func (e *Embedder) EmbedChunks(ctx context.Context, chunks []*indexer.CodeChunk,
 
 	wg.Wait()
 
-	if len(embedErrors) > 0 {
-		// Return partial results with error info
-		return results, fmt.Errorf("failed to embed %d chunks", len(embedErrors))
+	// 允许部分失败，只要成功超过 80% 就继续
+	successRate := float64(len(results)) / float64(total)
+	if successRate < 0.5 {
+		return results, fmt.Errorf("too many failures: only %d/%d chunks embedded (%.0f%%)", len(results), total, successRate*100)
+	}
+
+	if failedCount > 0 {
+		fmt.Printf("\n⚠️  Warning: %d chunks failed to embed, continuing with %d chunks\n", failedCount, len(results))
 	}
 
 	return results, nil
@@ -120,6 +141,11 @@ func (e *Embedder) createEmbeddingText(chunk *indexer.CodeChunk) string {
 		text = fmt.Sprintf("File: %s\n%s", chunk.FilePath, chunk.Content)
 	}
 
+	// 限制文本长度，避免超过模型限制
+	if len(text) > 8000 {
+		text = text[:8000]
+	}
+
 	return text
 }
 
@@ -132,4 +158,3 @@ func (e *Embedder) GetEmbeddingDimension(ctx context.Context) (int, error) {
 	}
 	return len(testEmbed), nil
 }
-
