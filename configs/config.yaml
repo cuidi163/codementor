@@ -1,25 +1,30 @@
 # CodeMentor Configuration File
 
-# Ollama LLM Configuration
+# Ollama LLM Configuration (for chat/generation)
 ollama:
   host: "http://localhost:11434"
-  chat_model: "qwen2.5:0.5b"              # 更小更快的 Chat 模型
-  embedding_model: "nomic-embed-text"     # 更小更快的 Embedding 模型
-  timeout: 300                             # Request timeout in seconds (5分钟)
+  chat_model: "qwen2.5:0.5b"              # Chat model
+  embedding_model: "nomic-embed-text"     # Fallback embedding model
+  timeout: 300                             # Request timeout in seconds
+
+# Embedding Service Configuration
+embedding:
+  provider: "codebert"                    # codebert or ollama
+  host: "http://localhost:8001"           # CodeBERT service URL
 
 # Vector Database Configuration
 vector:
-  type: "qdrant"                   # memory, qdrant
+  type: "qdrant"                          # memory, qdrant
   host: "localhost"
-  port: 6333                       # Qdrant default port
+  port: 6333                              # Qdrant default port
   collection: "codementor"
-  dimension: 768                   # Embedding dimension (768 for nomic-embed-text)
+  dimension: 768                          # CodeBERT dimension
 
 # Code Indexer Configuration
 indexer:
-  chunk_size: 1000                 # Target chunk size in characters
-  chunk_overlap: 200               # Overlap between chunks
-  extensions:                       # File extensions to index
+  chunk_size: 1000                        # Target chunk size in characters
+  chunk_overlap: 200                      # Overlap between chunks
+  extensions:                              # File extensions to index
     - ".go"
     - ".py"
     - ".js"
@@ -30,7 +35,7 @@ indexer:
     - ".c"
     - ".h"
     - ".md"
-  ignore_dirs:                      # Directories to ignore
+  ignore_dirs:                             # Directories to ignore
     - ".git"
     - "node_modules"
     - "vendor"
@@ -45,4 +50,3 @@ indexer:
 server:
   host: "0.0.0.0"
   port: 8080
-

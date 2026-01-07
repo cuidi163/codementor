@@ -6,7 +6,6 @@ import (
 
 	"github.com/codementor/codementor/internal/embedding"
 	"github.com/codementor/codementor/internal/indexer"
-	"github.com/codementor/codementor/internal/llm"
 )
 
 // HybridRetriever combines vector search with BM25 keyword search
@@ -19,11 +18,11 @@ type HybridRetriever struct {
 }
 
 // NewHybridRetriever creates a new hybrid retriever
-func NewHybridRetriever(store VectorStore, client *llm.Client) *HybridRetriever {
+func NewHybridRetriever(store VectorStore, embedder *embedding.Embedder) *HybridRetriever {
 	return &HybridRetriever{
 		vectorStore:  store,
 		bm25:         NewBM25(),
-		embedder:     embedding.NewEmbedder(client),
+		embedder:     embedder,
 		vectorWeight: 0.7, // Weight for vector similarity
 		bm25Weight:   0.3, // Weight for BM25
 	}
@@ -34,7 +33,7 @@ func (h *HybridRetriever) Index(ctx context.Context, chunks []*indexer.CodeChunk
 	// Build BM25 index (fast, no network calls)
 	h.bm25.Index(chunks)
 
-	// Generate embeddings and store (slow, requires LLM)
+	// Generate embeddings and store (slow, requires embedding service)
 	embeddedChunks, err := h.embedder.EmbedChunks(ctx, chunks, progressFn)
 	if err != nil {
 		return err

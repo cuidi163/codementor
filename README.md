@@ -24,7 +24,9 @@ CodeMentor is an intelligent code assistant that can "read" and understand your 
 - 💬 **Interactive Chat** - Multi-turn conversations with context awareness
 - 🚀 **Streaming Responses** - Real-time SSE streaming for better UX
 - 🔌 **Local LLM Support** - Works with Ollama (Qwen2.5, Llama3, etc.)
-- 🐳 **Docker Ready** - One-command deployment
+- 🧬 **CodeBERT Embedding** - Microsoft's code-specialized embedding model for better code understanding
+- 📦 **Qdrant Vector DB** - Production-grade vector database with HNSW indexing
+- 🐳 **Docker Ready** - One-command deployment with microservices
 - 🌐 **REST API** - Full HTTP API for programmatic access
 
 ## Quick Start
@@ -94,17 +96,36 @@ go build -o codementor ./cmd/codementor
 curl http://localhost:8080/health
 ```
 
-### Docker Deployment
+### Docker Deployment (Full Stack)
 
 ```bash
 # Make sure Ollama is running on host
 ollama serve
+ollama pull qwen2.5:0.5b  # or llama3.2
 
-# Start CodeMentor
+# Start all services (CodeBERT + Qdrant + CodeMentor API)
 docker-compose up -d
 
-# Check health
-curl http://localhost:8080/health
+# Wait for CodeBERT to load (~2 minutes first time)
+# Check services:
+curl http://localhost:8001/health  # CodeBERT
+curl http://localhost:6333/        # Qdrant
+curl http://localhost:8080/health  # CodeMentor API
+```
+
+### Local Development (without Docker)
+
+```bash
+# 1. Start Qdrant
+docker run -d -p 6333:6333 --name qdrant qdrant/qdrant
+
+# 2. Start CodeBERT service
+cd services/codebert
+pip install -r requirements.txt
+python main.py  # Runs on port 8000
+
+# 3. Run CodeMentor
+./codementor chat --path /path/to/repo
 ```
 
 ## Architecture
@@ -240,7 +261,29 @@ Content-Type: application/json
 
 ## Tech Highlights
 
-### 1. AST-Based Intelligent Chunking
+### 1. CodeBERT Embedding (Microservice Architecture)
+
+Using Microsoft's CodeBERT model for code-specialized embeddings:
+
+```
+┌─────────────┐     HTTP/REST     ┌─────────────────┐
+│  Go Client  │ ───────────────▶ │ CodeBERT Service │
+│ (codementor)│                   │   (FastAPI)      │
+└─────────────┘                   └─────────────────┘
+                                         │
+                                         ▼
+                                  ┌─────────────────┐
+                                  │ microsoft/      │
+                                  │ codebert-base   │
+                                  └─────────────────┘
+```
+
+**Why CodeBERT over general text models?**
+- Trained on code + natural language pairs
+- Understands code syntax and semantics natively
+- Better retrieval accuracy for code-related queries
+
+### 2. AST-Based Intelligent Chunking
 
 Unlike simple character-based splitting, CodeMentor uses Go's `go/ast` package to parse code at the semantic level:
 

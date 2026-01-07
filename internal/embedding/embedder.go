@@ -7,24 +7,23 @@ import (
 	"time"
 
 	"github.com/codementor/codementor/internal/indexer"
-	"github.com/codementor/codementor/internal/llm"
 )
 
 // Embedder generates embeddings for code chunks
 type Embedder struct {
-	client      *llm.Client
+	provider    Provider
 	batchSize   int
 	concurrency int
 	maxRetries  int
 }
 
-// NewEmbedder creates a new embedder
-func NewEmbedder(client *llm.Client) *Embedder {
+// NewEmbedder creates a new embedder with a provider
+func NewEmbedder(provider Provider) *Embedder {
 	return &Embedder{
-		client:      client,
+		provider:    provider,
 		batchSize:   10,
-		concurrency: 2, // 降低并发，避免 Ollama 过载
-		maxRetries:  3, // 添加重试
+		concurrency: 2, // Lower concurrency to avoid overloading
+		maxRetries:  3,
 	}
 }
 
@@ -64,7 +63,7 @@ func (e *Embedder) EmbedChunks(ctx context.Context, chunks []*indexer.CodeChunk,
 			var err error
 
 			for retry := 0; retry < e.maxRetries; retry++ {
-				embedding, err = e.client.Embed(ctx, text)
+				embedding, err = e.provider.Embed(ctx, text)
 				if err == nil {
 					break
 				}
@@ -97,7 +96,7 @@ func (e *Embedder) EmbedChunks(ctx context.Context, chunks []*indexer.CodeChunk,
 
 	wg.Wait()
 
-	// 允许部分失败，只要成功超过 80% 就继续
+	// Allow partial failures if success rate > 50%
 	successRate := float64(len(results)) / float64(total)
 	if successRate < 0.5 {
 		return results, fmt.Errorf("too many failures: only %d/%d chunks embedded (%.0f%%)", len(results), total, successRate*100)
@@ -111,37 +110,35 @@ func (e *Embedder) EmbedChunks(ctx context.Context, chunks []*indexer.CodeChunk,
 }
 
 // createEmbeddingText creates the text to embed for a chunk
-// This includes relevant metadata to improve retrieval quality
+// For CodeBERT, we use a code-focused format
 func (e *Embedder) createEmbeddingText(chunk *indexer.CodeChunk) string {
 	var text string
 
-	// Add context based on chunk type
+	// For CodeBERT, focus more on the code itself with minimal metadata
+	// CodeBERT understands code structure natively
 	switch chunk.ChunkType {
 	case indexer.ChunkTypeFunction, indexer.ChunkTypeMethod:
-		text = fmt.Sprintf("File: %s\nType: %s\n", chunk.FilePath, chunk.ChunkType)
-		if chunk.Signature != "" {
-			text += fmt.Sprintf("Signature: %s\n", chunk.Signature)
-		}
+		// Include signature and doc comment as they provide semantic context
 		if chunk.DocComment != "" {
-			text += fmt.Sprintf("Documentation: %s\n", chunk.DocComment)
+			text = fmt.Sprintf("// %s\n", chunk.DocComment)
 		}
-		if chunk.ParentName != "" {
-			text += fmt.Sprintf("Belongs to: %s\n", chunk.ParentName)
+		if chunk.Signature != "" {
+			text += chunk.Signature + "\n"
 		}
-		text += fmt.Sprintf("Code:\n%s", chunk.Content)
+		text += chunk.Content
 
 	case indexer.ChunkTypeStruct, indexer.ChunkTypeInterface:
-		text = fmt.Sprintf("File: %s\nType: %s\nName: %s\n", chunk.FilePath, chunk.ChunkType, chunk.Name)
 		if chunk.DocComment != "" {
-			text += fmt.Sprintf("Documentation: %s\n", chunk.DocComment)
+			text = fmt.Sprintf("// %s\n", chunk.DocComment)
 		}
-		text += fmt.Sprintf("Definition:\n%s", chunk.Content)
+		text += chunk.Content
 
 	default:
-		text = fmt.Sprintf("File: %s\n%s", chunk.FilePath, chunk.Content)
+		// For other types, include file path for context
+		text = fmt.Sprintf("// File: %s\n%s", chunk.FilePath, chunk.Content)
 	}
 
-	// 限制文本长度，避免超过模型限制
+	// Limit text length to avoid exceeding model limits
 	if len(text) > 8000 {
 		text = text[:8000]
 	}
@@ -149,12 +146,12 @@ func (e *Embedder) createEmbeddingText(chunk *indexer.CodeChunk) string {
 	return text
 }
 
-// GetEmbeddingDimension returns the dimension of embeddings
-func (e *Embedder) GetEmbeddingDimension(ctx context.Context) (int, error) {
-	// Generate a test embedding to get dimension
-	testEmbed, err := e.client.Embed(ctx, "test")
-	if err != nil {
-		return 0, err
-	}
-	return len(testEmbed), nil
+// GetProvider returns the underlying provider
+func (e *Embedder) GetProvider() Provider {
+	return e.provider
+}
+
+// GetDimension returns the embedding dimension
+func (e *Embedder) GetDimension() int {
+	return e.provider.GetDimension()
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/codementor/codementor/internal/config"
+	"github.com/codementor/codementor/internal/embedding"
 	"github.com/codementor/codementor/internal/indexer"
 	"github.com/codementor/codementor/internal/llm"
 	"github.com/codementor/codementor/internal/retriever"
@@ -14,19 +15,34 @@ import (
 
 // RAGAgent is the main agent that orchestrates RAG-based code Q&A
 type RAGAgent struct {
-	config      *config.Config
-	llmClient   *llm.Client
-	vectorStore retriever.VectorStore
-	retriever   *retriever.HybridRetriever
-	indexer     *indexer.Indexer
-	history     []llm.Message
-	repoName    string
-	qdrantStore *retriever.QdrantStore // Keep reference for HasData check
+	config            *config.Config
+	llmClient         *llm.Client
+	embeddingProvider embedding.Provider
+	vectorStore       retriever.VectorStore
+	retriever         *retriever.HybridRetriever
+	indexer           *indexer.Indexer
+	history           []llm.Message
+	repoName          string
+	qdrantStore       *retriever.QdrantStore
 }
 
 // NewRAGAgent creates a new RAG agent
 func NewRAGAgent(cfg *config.Config) *RAGAgent {
 	llmClient := llm.NewClient(cfg.Ollama)
+
+	// Create embedding provider based on config
+	var embeddingProvider embedding.Provider
+	switch cfg.Embedding.Provider {
+	case "codebert":
+		embeddingProvider = embedding.NewCodeBERTProvider(cfg.Embedding.Host)
+		fmt.Printf("📦 Using CodeBERT embedding provider (%s)\n", cfg.Embedding.Host)
+	default:
+		embeddingProvider = embedding.NewOllamaProvider(cfg.Ollama)
+		fmt.Printf("📦 Using Ollama embedding provider (%s)\n", cfg.Ollama.EmbeddingModel)
+	}
+
+	// Create embedder with provider
+	embedder := embedding.NewEmbedder(embeddingProvider)
 
 	var store retriever.VectorStore
 	var qdrantStore *retriever.QdrantStore
@@ -51,17 +67,23 @@ func NewRAGAgent(cfg *config.Config) *RAGAgent {
 		store = retriever.NewMemoryStore(dataPath)
 	}
 
-	hybridRetriever := retriever.NewHybridRetriever(store, llmClient)
+	hybridRetriever := retriever.NewHybridRetriever(store, embedder)
 
 	return &RAGAgent{
-		config:      cfg,
-		llmClient:   llmClient,
-		vectorStore: store,
-		retriever:   hybridRetriever,
-		indexer:     indexer.NewIndexer(cfg.Indexer),
-		history:     []llm.Message{},
-		qdrantStore: qdrantStore,
+		config:            cfg,
+		llmClient:         llmClient,
+		embeddingProvider: embeddingProvider,
+		vectorStore:       store,
+		retriever:         hybridRetriever,
+		indexer:           indexer.NewIndexer(cfg.Indexer),
+		history:           []llm.Message{},
+		qdrantStore:       qdrantStore,
 	}
+}
+
+// CheckEmbeddingHealth checks if the embedding service is healthy
+func (a *RAGAgent) CheckEmbeddingHealth(ctx context.Context) error {
+	return a.embeddingProvider.CheckHealth(ctx)
 }
 
 // IndexRepository indexes a code repository
@@ -76,7 +98,6 @@ func (a *RAGAgent) IndexRepository(ctx context.Context, repoPath string, progres
 		fmt.Printf("✅ Found existing index with %d chunks (skipping re-indexing)\n", existingCount)
 
 		// Still need to build BM25 index from existing data
-		// For Qdrant, we need to load chunks for BM25
 		if a.qdrantStore != nil {
 			fmt.Println("   Loading chunks for keyword search...")
 			// Parse repo to get chunks for BM25 (fast, no embedding needed)
@@ -294,4 +315,9 @@ func (a *RAGAgent) GetRetrievedChunks(ctx context.Context, query string, topK in
 // ClearIndex clears the vector store index
 func (a *RAGAgent) ClearIndex() error {
 	return a.vectorStore.Clear()
+}
+
+// GetEmbeddingProvider returns the embedding provider name
+func (a *RAGAgent) GetEmbeddingProvider() string {
+	return a.embeddingProvider.Name()
 }

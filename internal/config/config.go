@@ -9,10 +9,17 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Ollama   OllamaConfig   `mapstructure:"ollama"`
-	Vector   VectorConfig   `mapstructure:"vector"`
-	Indexer  IndexerConfig  `mapstructure:"indexer"`
-	Server   ServerConfig   `mapstructure:"server"`
+	Ollama    OllamaConfig    `mapstructure:"ollama"`
+	Embedding EmbeddingConfig `mapstructure:"embedding"`
+	Vector    VectorConfig    `mapstructure:"vector"`
+	Indexer   IndexerConfig   `mapstructure:"indexer"`
+	Server    ServerConfig    `mapstructure:"server"`
+}
+
+// EmbeddingConfig holds embedding service configuration
+type EmbeddingConfig struct {
+	Provider string `mapstructure:"provider"` // ollama, codebert
+	Host     string `mapstructure:"host"`     // For codebert service
 }
 
 // OllamaConfig holds Ollama-related configuration
@@ -54,6 +61,10 @@ func DefaultConfig() *Config {
 			ChatModel:      "qwen2.5:7b",
 			EmbeddingModel: "nomic-embed-text",
 			Timeout:        120,
+		},
+		Embedding: EmbeddingConfig{
+			Provider: "codebert",                 // codebert or ollama
+			Host:     "http://localhost:8001",    // CodeBERT service host
 		},
 		Vector: VectorConfig{
 			Type:       "memory",
