@@ -11,9 +11,9 @@ import (
 
 // HybridRetriever combines vector search with BM25 keyword search
 type HybridRetriever struct {
-	vectorStore VectorStore
-	bm25        *BM25
-	embedder    *embedding.Embedder
+	vectorStore  VectorStore
+	bm25         *BM25
+	embedder     *embedding.Embedder
 	vectorWeight float32
 	bm25Weight   float32
 }
@@ -24,8 +24,8 @@ func NewHybridRetriever(store VectorStore, client *llm.Client) *HybridRetriever 
 		vectorStore:  store,
 		bm25:         NewBM25(),
 		embedder:     embedding.NewEmbedder(client),
-		vectorWeight: 0.7,  // Weight for vector similarity
-		bm25Weight:   0.3,  // Weight for BM25
+		vectorWeight: 0.7, // Weight for vector similarity
+		bm25Weight:   0.3, // Weight for BM25
 	}
 }
 
@@ -150,8 +150,12 @@ func (h *HybridRetriever) GetChunkCount() int {
 	return h.vectorStore.Count()
 }
 
+// BuildBM25Index builds only the BM25 index (for when vector data already exists)
+func (h *HybridRetriever) BuildBM25Index(chunks []*indexer.CodeChunk) {
+	h.bm25.Index(chunks)
+}
+
 // Close closes the retriever
 func (h *HybridRetriever) Close() error {
 	return h.vectorStore.Close()
 }
-

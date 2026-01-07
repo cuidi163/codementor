@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/codementor/codementor/internal/config"
@@ -15,33 +16,78 @@ import (
 type RAGAgent struct {
 	config      *config.Config
 	llmClient   *llm.Client
+	vectorStore retriever.VectorStore
 	retriever   *retriever.HybridRetriever
 	indexer     *indexer.Indexer
 	history     []llm.Message
 	repoName    string
+	qdrantStore *retriever.QdrantStore // Keep reference for HasData check
 }
 
 // NewRAGAgent creates a new RAG agent
 func NewRAGAgent(cfg *config.Config) *RAGAgent {
 	llmClient := llm.NewClient(cfg.Ollama)
 
-	// Create data directory path
-	dataPath := fmt.Sprintf(".codementor/vectors_%s.json", cfg.Vector.Collection)
+	var store retriever.VectorStore
+	var qdrantStore *retriever.QdrantStore
 
-	store := retriever.NewMemoryStore(dataPath)
+	// Choose vector store based on config
+	switch cfg.Vector.Type {
+	case "qdrant":
+		qdrantHost := fmt.Sprintf("http://%s:%d", cfg.Vector.Host, cfg.Vector.Port)
+		var err error
+		qdrantStore, err = retriever.NewQdrantStore(qdrantHost, cfg.Vector.Collection, cfg.Vector.Dimension)
+		if err != nil {
+			fmt.Printf("⚠️  Failed to connect to Qdrant: %v\n", err)
+			fmt.Println("   Falling back to memory store")
+			dataPath := fmt.Sprintf(".codementor/vectors_%s.json", cfg.Vector.Collection)
+			store = retriever.NewMemoryStore(dataPath)
+		} else {
+			store = qdrantStore
+		}
+	default:
+		// Default to memory store
+		dataPath := fmt.Sprintf(".codementor/vectors_%s.json", cfg.Vector.Collection)
+		store = retriever.NewMemoryStore(dataPath)
+	}
+
 	hybridRetriever := retriever.NewHybridRetriever(store, llmClient)
 
 	return &RAGAgent{
-		config:    cfg,
-		llmClient: llmClient,
-		retriever: hybridRetriever,
-		indexer:   indexer.NewIndexer(cfg.Indexer),
-		history:   []llm.Message{},
+		config:      cfg,
+		llmClient:   llmClient,
+		vectorStore: store,
+		retriever:   hybridRetriever,
+		indexer:     indexer.NewIndexer(cfg.Indexer),
+		history:     []llm.Message{},
+		qdrantStore: qdrantStore,
 	}
 }
 
 // IndexRepository indexes a code repository
 func (a *RAGAgent) IndexRepository(ctx context.Context, repoPath string, progressFn func(stage string, current, total int)) error {
+	// Get repo name from path
+	absPath, _ := filepath.Abs(repoPath)
+	a.repoName = filepath.Base(absPath)
+
+	// Check if we already have data in the store (skip re-indexing)
+	existingCount := a.vectorStore.Count()
+	if existingCount > 0 {
+		fmt.Printf("✅ Found existing index with %d chunks (skipping re-indexing)\n", existingCount)
+
+		// Still need to build BM25 index from existing data
+		// For Qdrant, we need to load chunks for BM25
+		if a.qdrantStore != nil {
+			fmt.Println("   Loading chunks for keyword search...")
+			// Parse repo to get chunks for BM25 (fast, no embedding needed)
+			result, err := a.indexer.IndexRepository(repoPath)
+			if err == nil {
+				a.retriever.BuildBM25Index(result.Chunks)
+			}
+		}
+		return nil
+	}
+
 	// Stage 1: Parse code files
 	if progressFn != nil {
 		progressFn("parsing", 0, 0)
@@ -51,8 +97,6 @@ func (a *RAGAgent) IndexRepository(ctx context.Context, repoPath string, progres
 	if err != nil {
 		return fmt.Errorf("failed to parse repository: %w", err)
 	}
-
-	a.repoName = result.Repository.Name
 
 	// Stage 2: Generate embeddings and index
 	if progressFn != nil {
@@ -229,7 +273,7 @@ func (a *RAGAgent) ClearHistory() {
 
 // GetChunkCount returns the number of indexed chunks
 func (a *RAGAgent) GetChunkCount() int {
-	return a.retriever.GetChunkCount()
+	return a.vectorStore.Count()
 }
 
 // CheckHealth checks if the LLM is accessible
@@ -239,7 +283,7 @@ func (a *RAGAgent) CheckHealth(ctx context.Context) error {
 
 // Close closes the agent and releases resources
 func (a *RAGAgent) Close() error {
-	return a.retriever.Close()
+	return a.vectorStore.Close()
 }
 
 // GetRetrievedChunks returns chunks for a query (for debugging/display)
@@ -247,3 +291,7 @@ func (a *RAGAgent) GetRetrievedChunks(ctx context.Context, query string, topK in
 	return a.retriever.Search(ctx, query, topK)
 }
 
+// ClearIndex clears the vector store index
+func (a *RAGAgent) ClearIndex() error {
+	return a.vectorStore.Clear()
+}

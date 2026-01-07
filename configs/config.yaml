@@ -9,9 +9,9 @@ ollama:
 
 # Vector Database Configuration
 vector:
-  type: "memory"                   # memory, milvus, qdrant
+  type: "qdrant"                   # memory, qdrant
   host: "localhost"
-  port: 19530
+  port: 6333                       # Qdrant default port
   collection: "codementor"
   dimension: 768                   # Embedding dimension (768 for nomic-embed-text)
 
