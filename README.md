@@ -38,8 +38,11 @@ CodeMentor is an intelligent code assistant that can "read" and understand your 
    ollama serve
    
    # Pull required models
-   ollama pull qwen2.5:7b          # Chat model
-   ollama pull nomic-embed-text    # Embedding model
+   ollama pull llama3.2            # Chat model (3B, recommended)
+   ollama pull nomic-embed-text    # Embedding model (274MB, fast)
+   
+   # Alternative smaller chat model (faster but lower quality)
+   # ollama pull qwen2.5:0.5b
    ```
 
 ### Installation
@@ -304,8 +307,8 @@ No external API dependencies - runs entirely on local hardware:
 ```yaml
 ollama:
   host: "http://localhost:11434"
-  chat_model: "qwen2.5:7b"
-  embedding_model: "nomic-embed-text"
+  chat_model: "llama3.2:latest"       # or qwen2.5:0.5b for faster response
+  embedding_model: "nomic-embed-text" # lightweight and fast
   timeout: 120
 
 vector:
