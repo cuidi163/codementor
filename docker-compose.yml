@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  codementor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: codementor
+    ports:
+      - "8080:8080"
+    environment:
+      - CODEMENTOR_OLLAMA_HOST=http://host.docker.internal:11434
+      - CODEMENTOR_OLLAMA_CHAT_MODEL=qwen2.5:7b
+      - CODEMENTOR_OLLAMA_EMBEDDING_MODEL=nomic-embed-text
+    volumes:
+      - ./data:/app/data
+      - codementor-cache:/app/.codementor
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  codementor-cache:
+    driver: local
+
+# Usage:
+# 1. Make sure Ollama is running on host: ollama serve
+# 2. Pull required models: ollama pull qwen2.5:7b && ollama pull nomic-embed-text
+# 3. Start CodeMentor: docker-compose up -d
+# 4. Check health: curl http://localhost:8080/health
+# 5. Create session: curl -X POST http://localhost:8080/api/v1/sessions -H "Content-Type: application/json" -d '{"repo_path": "/path/to/repo"}'
+

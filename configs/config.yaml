@@ -1,0 +1,48 @@
+# CodeMentor Configuration File
+
+# Ollama LLM Configuration
+ollama:
+  host: "http://localhost:11434"
+  chat_model: "qwen2.5:7b"        # Model for chat/generation
+  embedding_model: "nomic-embed-text"  # Model for embeddings
+  timeout: 120                     # Request timeout in seconds
+
+# Vector Database Configuration
+vector:
+  type: "memory"                   # memory, milvus, qdrant
+  host: "localhost"
+  port: 19530
+  collection: "codementor"
+  dimension: 768                   # Embedding dimension (768 for nomic-embed-text)
+
+# Code Indexer Configuration
+indexer:
+  chunk_size: 1000                 # Target chunk size in characters
+  chunk_overlap: 200               # Overlap between chunks
+  extensions:                       # File extensions to index
+    - ".go"
+    - ".py"
+    - ".js"
+    - ".ts"
+    - ".java"
+    - ".rs"
+    - ".cpp"
+    - ".c"
+    - ".h"
+    - ".md"
+  ignore_dirs:                      # Directories to ignore
+    - ".git"
+    - "node_modules"
+    - "vendor"
+    - "__pycache__"
+    - ".idea"
+    - ".vscode"
+    - "target"
+    - "build"
+    - "dist"
+
+# HTTP Server Configuration
+server:
+  host: "0.0.0.0"
+  port: 8080
+
