@@ -63,8 +63,8 @@ func DefaultConfig() *Config {
 			Timeout:        120,
 		},
 		Embedding: EmbeddingConfig{
-			Provider: "codebert",                 // codebert or ollama
-			Host:     "http://localhost:8001",    // CodeBERT service host
+			Provider: "codebert",              // codebert or ollama
+			Host:     "http://localhost:8001", // CodeBERT service host
 		},
 		Vector: VectorConfig{
 			Type:       "memory",
@@ -134,4 +134,3 @@ func Load(configPath string) (*Config, error) {
 
 	return cfg, nil
 }
-
