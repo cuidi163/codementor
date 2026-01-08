@@ -8,18 +8,19 @@ services:
       dockerfile: Dockerfile
     container_name: codementor-codebert
     ports:
-      - "8001:8000"
+      - "8001:8001"
     environment:
+      - PORT=8001
       - MODEL_NAME=microsoft/codebert-base
     volumes:
       - codebert-cache:/root/.cache/huggingface
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 120s  # Model loading takes time
+      start_period: 10s  # Model is already downloaded during build
     deploy:
       resources:
         limits:
@@ -53,7 +54,7 @@ services:
       - CODEMENTOR_OLLAMA_HOST=http://host.docker.internal:11434
       - CODEMENTOR_OLLAMA_CHAT_MODEL=qwen2.5:0.5b
       - CODEMENTOR_EMBEDDING_PROVIDER=codebert
-      - CODEMENTOR_EMBEDDING_HOST=http://codebert:8000
+      - CODEMENTOR_EMBEDDING_HOST=http://codebert:8001
       - CODEMENTOR_VECTOR_TYPE=qdrant
       - CODEMENTOR_VECTOR_HOST=qdrant
       - CODEMENTOR_VECTOR_PORT=6333
@@ -88,7 +89,7 @@ volumes:
 # Usage:
 # 1. Make sure Ollama is running on host: ollama serve
 # 2. Start all services: docker-compose up -d
-# 3. Wait for CodeBERT to load (~2 minutes first time)
+# 3. CodeBERT model is downloaded during build, startup is fast
 # 4. Check health: curl http://localhost:8080/health
 # 5. Check CodeBERT: curl http://localhost:8001/health
 # 6. Create session: curl -X POST http://localhost:8080/api/v1/sessions -H "Content-Type: application/json" -d '{"repo_path": "/path/to/repo"}'

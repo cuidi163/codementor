@@ -11,11 +11,14 @@ from typing import List, Optional
 from contextlib import asynccontextmanager
 
 # Disable SSL verification BEFORE importing transformers
-ssl._create_default_https_context = ssl._create_unverified_context
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-os.environ["HF_HUB_DISABLE_SSL_VERIFY"] = "1"
+os.environ["PYTHONHTTPSVERIFY"] = "0"
 os.environ["CURL_CA_BUNDLE"] = ""
 os.environ["REQUESTS_CA_BUNDLE"] = ""
+os.environ["SSL_CERT_FILE"] = ""
+os.environ["HF_HUB_DISABLE_SSL_VERIFY"] = "1"
+
+ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Patch requests to disable SSL verification
 import requests
@@ -35,6 +38,7 @@ original_session_init = requests.Session.__init__
 def patched_session_init(self, *args, **kwargs):
     original_session_init(self, *args, **kwargs)
     self.mount('https://', SSLAdapter())
+    self.verify = False  # 额外设置
 requests.Session.__init__ = patched_session_init
 
 import torch
