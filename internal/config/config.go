@@ -112,6 +112,14 @@ func Load(configPath string) (*Config, error) {
 	viper.BindEnv("ollama.host", "CODEMENTOR_OLLAMA_HOST")
 	viper.BindEnv("ollama.chat_model", "CODEMENTOR_OLLAMA_CHAT_MODEL")
 	viper.BindEnv("ollama.embedding_model", "CODEMENTOR_OLLAMA_EMBEDDING_MODEL")
+	viper.BindEnv("embedding.provider", "CODEMENTOR_EMBEDDING_PROVIDER")
+	viper.BindEnv("embedding.host", "CODEMENTOR_EMBEDDING_HOST")
+	viper.BindEnv("vector.type", "CODEMENTOR_VECTOR_TYPE")
+	viper.BindEnv("vector.host", "CODEMENTOR_VECTOR_HOST")
+	viper.BindEnv("vector.port", "CODEMENTOR_VECTOR_PORT")
+	viper.BindEnv("vector.collection", "CODEMENTOR_VECTOR_COLLECTION")
+	viper.BindEnv("server.host", "CODEMENTOR_SERVER_HOST")
+	viper.BindEnv("server.port", "CODEMENTOR_SERVER_PORT")
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
