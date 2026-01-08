@@ -5,8 +5,37 @@ A FastAPI microservice that provides code embedding using Microsoft's CodeBERT m
 
 import os
 import logging
+import ssl
+import urllib3
 from typing import List, Optional
 from contextlib import asynccontextmanager
+
+# Disable SSL verification BEFORE importing transformers
+ssl._create_default_https_context = ssl._create_unverified_context
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+os.environ["HF_HUB_DISABLE_SSL_VERIFY"] = "1"
+os.environ["CURL_CA_BUNDLE"] = ""
+os.environ["REQUESTS_CA_BUNDLE"] = ""
+
+# Patch requests to disable SSL verification
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
+
+class SSLAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = create_urllib3_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        kwargs['ssl_context'] = ctx
+        return super().init_poolmanager(*args, **kwargs)
+
+# Monkey patch requests.Session to use our SSL adapter
+original_session_init = requests.Session.__init__
+def patched_session_init(self, *args, **kwargs):
+    original_session_init(self, *args, **kwargs)
+    self.mount('https://', SSLAdapter())
+requests.Session.__init__ = patched_session_init
 
 import torch
 from fastapi import FastAPI, HTTPException

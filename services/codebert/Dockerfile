@@ -3,33 +3,35 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (including ca-certificates for SSL)
 RUN apt-get update && apt-get install -y \
     gcc \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# Disable SSL verification for networks with TLS interception
+ENV CURL_CA_BUNDLE=""
+ENV REQUESTS_CA_BUNDLE=""
+ENV SSL_CERT_FILE=""
+ENV HF_HUB_DISABLE_SSL_VERIFY=1
+ENV PORT=8001
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Download model during build (optional, can be done at runtime)
-# This makes the image larger but startup faster
-RUN python -c "from transformers import AutoTokenizer, AutoModel; \
-    AutoTokenizer.from_pretrained('microsoft/codebert-base'); \
-    AutoModel.from_pretrained('microsoft/codebert-base')"
+# Install Python dependencies (with trusted hosts for pip)
+RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Copy application code
 COPY main.py .
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')" || exit 1
 
 # Run the service
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
 

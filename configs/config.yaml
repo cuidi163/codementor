@@ -10,7 +10,7 @@ ollama:
 # Embedding Service Configuration
 embedding:
   provider: "codebert"                    # codebert or ollama
-  host: "http://localhost:8001"           # CodeBERT service URL
+  host: "http://localhost:8001"          # CodeBERT service URL (if using codebert)
 
 # Vector Database Configuration
 vector:
@@ -18,7 +18,7 @@ vector:
   host: "localhost"
   port: 6333                              # Qdrant default port
   collection: "codementor"
-  dimension: 768                          # CodeBERT dimension
+  dimension: 768                          # nomic-embed-text dimension is 768
 
 # Code Indexer Configuration
 indexer:
